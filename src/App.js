@@ -110,7 +110,7 @@ function App() {
       return;
     }
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('orders')
       .insert(ordersToSend);
 

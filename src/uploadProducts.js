@@ -25,7 +25,7 @@ export default function uploadProductsFromCSV(file) {
       }));
 
       try {
-        const { data: insertedData, error } = await supabase
+        const { error } = await supabase
           .from('products')
           .insert(csvData);
 
