@@ -33,7 +33,6 @@ function App() {
       .replace(/ö/g, "o");
   }
 
-  // Sayfa açılır açılmaz Supabase'den ürünleri çekiyoruz.
   useEffect(() => {
     async function fetchProducts() {
       try {
@@ -67,7 +66,6 @@ function App() {
     fetchProducts();
   }, []);
 
-  // Sipariş miktarındaki değişiklikleri takip eden fonksiyon.
   const handleQuantityChange = (productId, value, maxStock) => {
     let quantity = parseInt(value, 10);
     if (isNaN(quantity) || quantity < 0) quantity = 0;
@@ -75,7 +73,6 @@ function App() {
     setOrderQuantities(prev => ({ ...prev, [productId]: quantity }));
   };
 
-  // Sipariş gönderme işlemi.
   const handleOrderSubmit = async () => {
     if (!customerName.trim()) {
       alert("Lütfen firma adınızı girin!");
@@ -140,7 +137,6 @@ function App() {
     alert("Sipariş başarıyla gönderildi!");
   };
 
-  // Toplam hesaplamalar
   const totalOrderAmount = Object.entries(orderQuantities).reduce((acc, [productId, quantity]) => {
     const product = products.find(p => p.id === productId);
     return acc + (product ? product.price * parseInt(quantity || "0", 10) : 0);
@@ -160,8 +156,16 @@ function App() {
 
   return (
     <div style={{ padding: "10px" }}>
-      <h1 style={{ textAlign: "center" }}>Overstock Sipariş Sistemi</h1>
-
+      {/* Header Bölümü: Üstte sol kısımda logonuz ve site başlığı */}
+      <header style={{ display: "flex", alignItems: "center", marginBottom: "20px" }}>
+        <img 
+          src="/design.png" 
+          alt="Site Logosu" 
+          style={{ height: "110px", marginRight: "370px" }}
+        />
+        <h1>Overstock Sipariş Sistemi</h1>
+      </header>
+      
       {/* Admin Girişi */}
       {!isAdmin && (
         <div style={{ textAlign: "center" }}>
