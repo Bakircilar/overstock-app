@@ -1,10 +1,11 @@
-// App.js
+// App.js - Fiyat tipi seçimi zorunlu yapılmış hali
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient'; // Supabase bağlantısı
 import uploadProductsFromCSV from "./uploadProducts"; // CSV yükleme fonksiyonu
 import WhatsAppWidget from "./WhatsAppWidget"; // Yeni bileşeni import et
 import OrderConfirmationModal from './OrderConfirmationModal'; // Sipariş onay modalı
-// PDF kütüphanelerini doğru şekilde import ediyoruz
+import OrderHistory from './OrderHistory'; // Sipariş geçmişi bileşeni
+import './FloatingOrderPanel.css'; // Yeni CSS dosyası
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './App.css';  // Responsive stiller için CSS dosyasını ekledik
@@ -24,12 +25,15 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState("Tümü");
   const [categories, setCategories] = useState([]);
   const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState(""); 
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   // Yeni state değişkenleri
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [orderToConfirm, setOrderToConfirm] = useState([]);
+  const [showOrderPanel, setShowOrderPanel] = useState(false); // Panel görünürlüğü için
+  const [selectedPriceType, setSelectedPriceType] = useState(null); // Fiyat tipi seçimi için, başlangıçta null
 
   // Stok için düşük seviye eşiği
   const LOW_STOCK_THRESHOLD = 5;
@@ -91,12 +95,28 @@ function App() {
       alert("Lütfen firma adınızı girin!");
       return;
     }
+    
+    if (!customerPhone.trim()) {
+      alert("Lütfen telefon numaranızı girin!");
+      return;
+    }
+    
+    // Fiyat tipi kontrolü ekliyoruz
+    if (!selectedPriceType) {
+      alert("Lütfen fiyat türü seçin!");
+      return;
+    }
 
     const itemsToOrder = [];
     
     for (const product of products) {
       const quantity = parseInt(orderQuantities[product.id] || "0", 10);
       if (quantity > 0 && quantity <= product.stock) {
+        // Seçilen fiyat tipine göre tutar hesaplama
+        const priceWithVAT = product.price * (1 + product.vatRate / 100);
+        const whitePrice = product.price * (1 + product.vatRate / 200);
+        const selectedPrice = selectedPriceType === "kdvDahil" ? priceWithVAT : whitePrice;
+        
         itemsToOrder.push({
           id: product.id,
           stockCode: product.stockCode,
@@ -105,7 +125,11 @@ function App() {
           price: product.price,
           unit: product.unit,
           vatRate: product.vatRate,
-          totalPrice: product.price * quantity * (1 + product.vatRate / 100)
+          totalPrice: product.price * quantity * (1 + product.vatRate / 100),
+          totalWhitePrice: whitePrice * quantity,
+          selectedPriceType: selectedPriceType,
+          selectedPrice: selectedPrice,
+          totalSelectedPrice: selectedPrice * quantity
         });
       }
     }
@@ -126,26 +150,34 @@ function App() {
       const doc = new jsPDF();
       
       // PDF Başlığı
-      doc.setFontSize(20);
+      doc.setFontSize(16); // Daha küçük başlık
       doc.text("Sipariş Detayları", 14, 22);
       
       // Firma Bilgileri
-      doc.setFontSize(12);
-      doc.text(`Firma: ${customerName}`, 14, 35);
-      doc.text(`Sipariş Tarihi: ${new Date().toLocaleDateString('tr-TR')}`, 14, 42);
+      doc.setFontSize(10); // Daha küçük yazı
+      doc.text(`Firma: ${customerName}`, 14, 32);
+      doc.text(`Telefon: ${customerPhone}`, 14, 38); 
+      doc.text(`Sipariş Tarihi: ${new Date().toLocaleDateString('tr-TR')}`, 14, 44);
+      doc.text(`Fiyat Türü: ${selectedPriceType === "kdvDahil" ? "KDV Dahil Fiyat" : "Beyaz Fiyat"}`, 14, 50);
       
       // Sipariş Tablosu
       const tableColumn = ["Stok Kodu", "Ürün", "Miktar", "Birim", "Birim Fiyat", "Toplam"];
       const tableRows = [];
 
       orderToConfirm.forEach(item => {
+        const displayPrice = selectedPriceType === "kdvDahil" ? 
+          item.price * (1 + item.vatRate / 100) :
+          item.price * (1 + item.vatRate / 200);
+
+        const totalDisplayPrice = displayPrice * item.quantity;
+
         const itemData = [
           item.stockCode,
           item.name,
           item.quantity,
           item.unit,
-          formatCurrency(item.price),
-          formatCurrency(item.totalPrice)
+          formatCurrency(displayPrice),
+          formatCurrency(totalDisplayPrice)
         ];
         tableRows.push(itemData);
       });
@@ -154,17 +186,21 @@ function App() {
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
-        startY: 50,
+        startY: 55,
         theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 2 },
+        styles: { fontSize: 8, cellPadding: 2 }, // Küçük yazı
         headStyles: { fillColor: [60, 60, 60] }
       });
       
-      // Toplam Tutar Bilgileri
+      // Toplam Tutar Bilgileri - Daha sağa yaslı ve küçük
       const finalY = doc.lastAutoTable.finalY + 10;
-      doc.text(`KDV Hariç Toplam: ${formatCurrency(totalOrderAmount)}`, 120, finalY);
-      doc.text(`KDV Dahil Toplam: ${formatCurrency(totalOrderAmountWithVAT)}`, 120, finalY + 7);
-      doc.text(`Beyaz Fiyat Toplam: ${formatCurrency(totalWhitePriceAmount)}`, 120, finalY + 14);
+      
+      // Seçilen fiyat tipine göre toplam tutar gösterme
+      if (selectedPriceType === "kdvDahil") {
+        doc.text(`KDV Dahil Toplam: ${formatCurrency(totalOrderAmountWithVAT)}`, 130, finalY);
+      } else {
+        doc.text(`Beyaz Fiyat Toplam: ${formatCurrency(totalWhitePriceAmount)}`, 130, finalY);
+      }
       
       // PDF'i kaydet
       doc.save(`${customerName}_siparis_${new Date().toISOString().slice(0, 10)}.pdf`);
@@ -186,6 +222,7 @@ function App() {
       if (quantity > 0 && quantity <= product.stock) {
         ordersToSend.push({
           customerName: customerName.trim(),
+          customerPhone: customerPhone.trim(),
           stockCode: product.stockCode,
           productId: product.id,
           productName: product.name,
@@ -195,6 +232,7 @@ function App() {
           whitePrice: product.price * (1 + (product.vatRate / 200)),
           totalPrice: product.price * quantity * (1 + product.vatRate / 100),
           unit: product.unit,
+          selectedPriceType: selectedPriceType, // Seçilen fiyat tipini veritabanına kaydet
           timestamp: new Date()
         });
         updatedProducts.find(p => p.id === product.id).stock -= quantity;
@@ -232,6 +270,9 @@ function App() {
     generateOrderPDF();
     
     setCustomerName(""); 
+    setCustomerPhone(""); 
+    setSelectedPriceType(null); // Fiyat tipini sıfırla
+    setShowOrderPanel(false); // Sipariş panelini gizle
     alert("Sipariş başarıyla gönderildi!");
   };
 
@@ -251,6 +292,11 @@ function App() {
     const whitePrice = product ? product.price * (1 + (product.vatRate / 200)) : 0;
     return acc + (whitePrice * parseInt(quantity || "0", 10));
   }, 0);
+  
+  // Seçilen fiyat tipine göre toplam tutar
+  const totalSelectedAmount = selectedPriceType === "kdvDahil" ? 
+    totalOrderAmountWithVAT : 
+    (selectedPriceType === "beyaz" ? totalWhitePriceAmount : 0);
 
   // Filtrelenmiş ürünleri hesapla
   const filteredProducts = products
@@ -260,8 +306,11 @@ function App() {
        normalizeText(product.stockCode).includes(normalizeText(searchQuery)))
     );
 
+  // Toplam sipariş edilmiş ürün sayısı
+  const totalOrderedItems = Object.values(orderQuantities).reduce((sum, qty) => sum + (parseInt(qty) || 0), 0);
+
   return (
-    <div style={{ padding: "10px" }}>
+    <div style={{ padding: "10px", paddingBottom: "80px" }}> {/* Alt panel için ekstra padding */}
       {/* Header Bölümü: Üstte sol kısımda logonuz ve site başlığı */}
       <header style={{ display: "flex", alignItems: "center", marginBottom: "20px" }}>
         <img 
@@ -291,6 +340,13 @@ function App() {
         <div style={{ textAlign: "center", marginBottom: "10px" }}>
           <h3>Ürünleri Toplu Yükle</h3>
           <input type="file" accept=".csv" onChange={(e) => uploadProductsFromCSV(e.target.files[0])} />
+        </div>
+      )}
+      
+      {/* Sipariş Geçmişi (Sadece Adminler İçin) */}
+      {isAdmin && (
+        <div style={{ marginTop: "30px" }}>
+          <OrderHistory formatCurrency={formatCurrency} />
         </div>
       )}
 
@@ -370,27 +426,102 @@ function App() {
         </table>
       </div>
 
-      {/* Firma Adı Girişi */}
-      <div style={{ marginTop: "20px", textAlign: "center" }}>
-        <label><strong>Firma Adı:</strong> </label>
-        <input
-          type="text"
-          placeholder="Firma Adınızı girin"
-          value={customerName}
-          onChange={(e) => setCustomerName(e.target.value)}
-          style={{ marginLeft: "10px" }}
-        />
-      </div>
+      {/* Sabit Sipariş Özeti Paneli */}
+      {totalOrderedItems > 0 && (
+        <div className="floating-order-panel">
+          <div className="panel-summary">
+            <div className="panel-items-count">
+              <span>{totalOrderedItems} ürün</span>
+            </div>
+            <div className="panel-total">
+              <span>Toplam:</span>
+              <strong>
+                {selectedPriceType ? 
+                  formatCurrency(totalSelectedAmount) : 
+                  "Lütfen fiyat türü seçin"}
+              </strong>
+            </div>
+            <button 
+              className="panel-complete-button"
+              onClick={() => setShowOrderPanel(!showOrderPanel)}
+            >
+              {showOrderPanel ? "Paneli Gizle" : "Siparişi Tamamla"}
+            </button>
+          </div>
 
-      {/* Sipariş Toplamları */}
-      <div style={{ marginTop: "10px", textAlign: "center" }}>
-        <p><strong>KDV Hariç Toplam:</strong> {formatCurrency(totalOrderAmount)}</p>
-        <p><strong>KDV Dahil Toplam:</strong> {formatCurrency(totalOrderAmountWithVAT)}</p>
-        <p><strong>Beyaz Fiyat Toplam:</strong> {formatCurrency(totalWhitePriceAmount)}</p>
-      </div>
+          {showOrderPanel && (
+            <div className="panel-details">
+              {/* Firma Adı ve Telefon Girişi */}
+              <div className="panel-inputs">
+                <div className="input-group">
+                  <label><strong>Firma Adı:</strong> <span className="required-mark">*</span></label>
+                  <input
+                    type="text"
+                    placeholder="Firma Adınızı girin"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    required
+                  />
+                </div>
+                
+                <div className="input-group">
+                  <label><strong>Telefon Numaranız:</strong> <span className="required-mark">*</span></label>
+                  <input
+                    type="tel"
+                    placeholder="530 178 35 70"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
 
-      {/* Sipariş gönder butonunun fonksiyonunu değiştirdik */}
-      <button onClick={showOrderConfirmation}>Siparişi Gönder</button>
+              {/* Fiyat Tipi Seçimi */}
+              <div className="price-type-selector">
+                <div className="selector-label">
+                  <strong>Fiyat Türü Seçimi:</strong> <span className="required-mark">*</span>
+                </div>
+                <div className="radio-group">
+                  <label className="radio-label">
+                    <input
+                      type="radio"
+                      name="priceType"
+                      value="kdvDahil"
+                      checked={selectedPriceType === "kdvDahil"}
+                      onChange={(e) => setSelectedPriceType(e.target.value)}
+                      required
+                    />
+                    KDV Dahil Fiyat ({formatCurrency(totalOrderAmountWithVAT)})
+                  </label>
+                  <label className="radio-label">
+                    <input
+                      type="radio"
+                      name="priceType"
+                      value="beyaz"
+                      checked={selectedPriceType === "beyaz"}
+                      onChange={(e) => setSelectedPriceType(e.target.value)}
+                      required
+                    />
+                    Beyaz Fiyat ({formatCurrency(totalWhitePriceAmount)})
+                  </label>
+                </div>
+                {!selectedPriceType && (
+                  <div className="price-type-warning">Lütfen bir fiyat türü seçin</div>
+                )}
+              </div>
+
+              {/* Sipariş Gönder Butonu */}
+              <button 
+                className="send-order-button" 
+                onClick={showOrderConfirmation}
+              >
+                Siparişi Onayla ve Gönder
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       <WhatsAppWidget />
 
       {/* Sipariş onay modalı */}
@@ -400,9 +531,11 @@ function App() {
         onConfirm={confirmAndSubmitOrder}
         orderItems={orderToConfirm}
         customerName={customerName}
+        customerPhone={customerPhone}
         totalOrderAmount={totalOrderAmount}
         totalOrderAmountWithVAT={totalOrderAmountWithVAT}
         totalWhitePriceAmount={totalWhitePriceAmount}
+        selectedPriceType={selectedPriceType}
         formatCurrency={formatCurrency}
       />
     </div>

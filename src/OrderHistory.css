@@ -1,0 +1,167 @@
+/* OrderHistory.css */
+.order-history {
+  margin-top: 30px;
+  padding: 15px;
+  background-color: #fff;
+  border-radius: 5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.order-history h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.loading {
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+  color: #666;
+}
+
+.order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.order-card {
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  padding: 15px;
+  background-color: #f9f9f9;
+}
+
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.order-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.2rem;
+}
+
+.order-phone {
+  font-size: 0.9rem;
+  color: #3498db;
+  margin: 2px 0 0 0;
+}
+
+.order-date {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+  margin: 2px 0 0 0;
+}
+
+.order-price-type {
+  font-size: 0.9rem;
+  color: #e67e22;
+  margin: 2px 0 0 0;
+  font-weight: bold;
+}
+
+.order-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pdf-button {
+  padding: 6px 12px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+}
+
+.pdf-button:hover {
+  background-color: #2980b9;
+}
+
+.downloaded-mark {
+  color: #27ae60;
+  font-weight: bold;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+}
+
+.order-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  background-color: #f2f2f2;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.order-summary p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.order-details {
+  border-top: 1px solid #eee;
+  padding-top: 10px;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: bold;
+  margin-bottom: 10px;
+  color: #34495e;
+}
+
+.order-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.order-items-table th, 
+.order-items-table td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.order-items-table th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+}
+
+/* Mobil Responsive Ayarlar */
+@media (max-width: 768px) {
+  .order-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .order-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .order-summary {
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .order-items-table {
+    font-size: 0.8rem;
+  }
+}
