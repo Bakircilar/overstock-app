@@ -34,7 +34,6 @@ header {
   display: flex;
   align-items: center;
   margin-bottom: 20px;
-  /* Masaüstünde logo ve başlık yan yana, mobilde üst üste gelecek */
   flex-direction: row;
 }
 
@@ -77,13 +76,15 @@ th, td {
   }
   
   header {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: column; /* Elemanları dikey sırala */
+    align-items: center;    /* Elemanları ortala */
+    justify-content: center;
   }
   
   header h1 {
     font-size: 1.2rem;
     margin-top: 5px;
+    text-align: center;
   }
   
   table {
