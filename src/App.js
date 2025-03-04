@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient'; // Supabase bağlantısı
 import uploadProductsFromCSV from "./uploadProducts"; // CSV yükleme fonksiyonu
+import './App.css';  // Responsive stiller için CSS dosyasını ekledik
 
 // Formatlama fonksiyonu: Sayısal değerleri Türkçe biçimde, binlik ayırıcı ve iki ondalık ile gösterir.
 function formatCurrency(amount) {
@@ -159,9 +160,9 @@ function App() {
       {/* Header Bölümü: Üstte sol kısımda logonuz ve site başlığı */}
       <header style={{ display: "flex", alignItems: "center", marginBottom: "20px" }}>
         <img 
-          src="/design.png" 
+          src="/logo.png" 
           alt="Site Logosu" 
-          style={{ height: "110px", marginRight: "370px" }}
+          style={{ height: "50px", marginRight: "10px" }}
         />
         <h1>Overstock Sipariş Sistemi</h1>
       </header>
@@ -204,7 +205,7 @@ function App() {
         />
       </div>
 
-      <div style={{ overflowX: "auto" }}>
+      <div className="table-container" style={{ overflowX: "auto" }}>
         <table border="1" style={{ width: "100%", minWidth: "700px", textAlign: "center" }}>
           <thead>
             <tr>
