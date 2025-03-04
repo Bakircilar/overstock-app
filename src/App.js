@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient'; // Supabase bağlantısı
 import uploadProductsFromCSV from "./uploadProducts"; // CSV yükleme fonksiyonu
+import WhatsAppWidget from "./WhatsAppWidget"; // Yeni bileşeni import et
 import './App.css';  // Responsive stiller için CSS dosyasını ekledik
 
 // Formatlama fonksiyonu: Sayısal değerleri Türkçe biçimde, binlik ayırıcı ve iki ondalık ile gösterir.
@@ -279,6 +280,7 @@ function App() {
       </div>
 
       <button onClick={handleOrderSubmit}>Siparişi Gönder</button>
+      <WhatsAppWidget />
     </div>
   );
 }
