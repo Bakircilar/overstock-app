@@ -1,4 +1,4 @@
-// App.js - Fiyat tipi seçimi zorunlu yapılmış hali
+// App.js
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient'; // Supabase bağlantısı
 import uploadProductsFromCSV from "./uploadProducts"; // CSV yükleme fonksiyonu
@@ -80,7 +80,49 @@ function App() {
       }
     }
     fetchProducts();
-  }, []);
+
+    // Gerçek zamanlı stok takibi için Supabase kanalı oluştur
+    const stockSubscription = supabase
+      .channel('product-stock-changes')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'products',
+      }, (payload) => {
+        // Stok değişikliği olduğunda
+        const updatedProduct = payload.new;
+        
+        // Mevcut ürünleri güncelle
+        setProducts(prevProducts => 
+          prevProducts.map(product => 
+            product.id === updatedProduct.id ? 
+              { ...product, stock: updatedProduct.stock } : 
+              product
+          )
+        );
+        
+        // Eğer sipariş miktarı stoktan fazlaysa, miktarı güncelle
+        if (orderQuantities[updatedProduct.id] > updatedProduct.stock) {
+          setOrderQuantities(prev => ({ 
+            ...prev, 
+            [updatedProduct.id]: updatedProduct.stock 
+          }));
+          
+          // Stok değişikliği bildirimi göster
+          if (updatedProduct.stock <= 0) {
+            alert(`"${updatedProduct.name}" ürünü tükendi. Sepetiniz güncellendi.`);
+          } else {
+            alert(`"${updatedProduct.name}" ürününün stok miktarı değişti. Yeni stok: ${updatedProduct.stock}. Sepetiniz güncellendi.`);
+          }
+        }
+      })
+      .subscribe();
+
+    // Component unmount olduğunda abonelikten çık
+    return () => {
+      stockSubscription.unsubscribe();
+    };
+  }, [orderQuantities]); // orderQuantities bağımlılığını ekledik
 
   const handleQuantityChange = (productId, value, maxStock) => {
     let quantity = parseInt(value, 10);
@@ -210,70 +252,131 @@ function App() {
     }
   };
 
-  // Sipariş onaylandığında çalışacak fonksiyon
+  // Sipariş onaylandığında çalışacak fonksiyon - gerçek zamanlı stok kontrolü ile
   const confirmAndSubmitOrder = async () => {
     setShowConfirmationModal(false);
     
-    const ordersToSend = [];
-    const updatedProducts = [...products];
-
-    for (const product of products) {
-      const quantity = parseInt(orderQuantities[product.id] || "0", 10);
-      if (quantity > 0 && quantity <= product.stock) {
-        ordersToSend.push({
-          customerName: customerName.trim(),
-          customerPhone: customerPhone.trim(),
-          stockCode: product.stockCode,
-          productId: product.id,
-          productName: product.name,
-          quantity: quantity,
-          price: product.price,
-          vatRate: product.vatRate,
-          whitePrice: product.price * (1 + (product.vatRate / 200)),
-          totalPrice: product.price * quantity * (1 + product.vatRate / 100),
-          unit: product.unit,
-          selectedPriceType: selectedPriceType, // Seçilen fiyat tipini veritabanına kaydet
-          timestamp: new Date()
-        });
-        updatedProducts.find(p => p.id === product.id).stock -= quantity;
-      }
-    }
-
-    const { error } = await supabase
-      .from('orders')
-      .insert(ordersToSend);
-
-    if (error) {
-      console.error("Sipariş ekleme hatası:", error);
-      alert("Sipariş eklenirken hata oluştu!");
-      return;
-    }
-
-    for (const product of products) {
-      const quantity = parseInt(orderQuantities[product.id] || "0", 10);
-      if (quantity > 0 && quantity <= product.stock + quantity) {
-        const newStock = product.stock - quantity;
-        const { error: updateError } = await supabase
-          .from('products')
-          .update({ stock: newStock })
-          .eq('id', product.id);
-        if (updateError) {
-          console.error("Stok güncelleme hatası:", updateError);
+    try {
+      // Sipariş edilecek ürünlerin listesini hazırlayalım
+      const productsToOrder = [];
+      for (const product of products) {
+        const quantity = parseInt(orderQuantities[product.id] || "0", 10);
+        if (quantity > 0) {
+          productsToOrder.push({
+            id: product.id,
+            requestedQuantity: quantity
+          });
         }
       }
-    }
+      
+      // Stokta olmayan ürünleri kontrol edeceğiz
+      const stockErrors = [];
+      
+      // Siparişe eklenecek ürünlerin güncel stok durumlarını çekelim
+      for (const productToOrder of productsToOrder) {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, name, stock')
+          .eq('id', productToOrder.id)
+          .single();
+        
+        if (error) {
+          console.error("Stok kontrolü sırasında hata:", error);
+          stockErrors.push(`Ürün durumu kontrol edilemedi: ${error.message}`);
+          continue;
+        }
+        
+        if (!data) {
+          stockErrors.push(`Ürün bulunamadı (ID: ${productToOrder.id})`);
+          continue;
+        }
+        
+        // Güncel stok kontrolü
+        if (productToOrder.requestedQuantity > data.stock) {
+          stockErrors.push(`"${data.name}" ürününden istediğiniz miktarda stok kalmadı. Güncel stok: ${data.stock}`);
+          
+          // State'i güncelle
+          setProducts(prevProducts => 
+            prevProducts.map(p => 
+              p.id === data.id ? { ...p, stock: data.stock } : p
+            )
+          );
+        }
+      }
+      
+      // Stok hatası varsa göster ve işlemi durdur
+      if (stockErrors.length > 0) {
+        alert(`Siparişiniz işlenemiyor:\n\n${stockErrors.join('\n\n')}\n\nLütfen sepetinizi güncelleyin.`);
+        return;
+      }
+      
+      // Stok kontrolü geçtiyse işleme devam et...
+      
+      const ordersToSend = [];
+      const updatedProducts = [...products];
 
-    setProducts(updatedProducts);
-    setOrderQuantities({});
-    
-    // PDF oluştur - try/catch içinde çağrılıyor
-    generateOrderPDF();
-    
-    setCustomerName(""); 
-    setCustomerPhone(""); 
-    setSelectedPriceType(null); // Fiyat tipini sıfırla
-    setShowOrderPanel(false); // Sipariş panelini gizle
-    alert("Sipariş başarıyla gönderildi!");
+      for (const product of products) {
+        const quantity = parseInt(orderQuantities[product.id] || "0", 10);
+        if (quantity > 0) {
+          ordersToSend.push({
+            customerName: customerName.trim(),
+            customerPhone: customerPhone.trim(),
+            stockCode: product.stockCode,
+            productId: product.id,
+            productName: product.name,
+            quantity: quantity,
+            price: product.price,
+            vatRate: product.vatRate,
+            whitePrice: product.price * (1 + (product.vatRate / 200)),
+            totalPrice: product.price * quantity * (1 + product.vatRate / 100),
+            unit: product.unit,
+            selectedPriceType: selectedPriceType,
+            timestamp: new Date()
+          });
+          updatedProducts.find(p => p.id === product.id).stock -= quantity;
+        }
+      }
+
+      const { error } = await supabase
+        .from('orders')
+        .insert(ordersToSend);
+
+      if (error) {
+        console.error("Sipariş ekleme hatası:", error);
+        alert("Sipariş eklenirken hata oluştu!");
+        return;
+      }
+
+      // Stokları azalt
+      for (const product of products) {
+        const quantity = parseInt(orderQuantities[product.id] || "0", 10);
+        if (quantity > 0) {
+          const { error: updateError } = await supabase
+            .from('products')
+            .update({ stock: updatedProducts.find(p => p.id === product.id).stock })
+            .eq('id', product.id);
+            
+          if (updateError) {
+            console.error("Stok güncelleme hatası:", updateError);
+          }
+        }
+      }
+
+      setProducts(updatedProducts);
+      setOrderQuantities({});
+      
+      // PDF oluştur
+      generateOrderPDF();
+      
+      setCustomerName(""); 
+      setCustomerPhone(""); 
+      setSelectedPriceType(null);
+      setShowOrderPanel(false);
+      alert("Sipariş başarıyla gönderildi!");
+    } catch (error) {
+      console.error("Sipariş işleme hatası:", error);
+      alert("Sipariş işlenirken bir hata oluştu. Lütfen tekrar deneyin.");
+    }
   };
 
   const totalOrderAmount = Object.entries(orderQuantities).reduce((acc, [productId, quantity]) => {

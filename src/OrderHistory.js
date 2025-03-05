@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import './OrderHistory.css';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 
 function OrderHistory({ formatCurrency }) {
   const [orders, setOrders] = useState([]);
@@ -45,6 +46,65 @@ function OrderHistory({ formatCurrency }) {
 
     fetchOrders();
   }, []);
+
+  // Excel dışa aktarma fonksiyonu
+  const exportOrdersToExcel = (orders) => {
+    try {
+      // Tüm siparişleri düzleştirip Excel formatına uygun hale getiriyoruz
+      const flattenedOrders = [];
+      
+      orders.forEach(order => {
+        order.items.forEach(item => {
+          flattenedOrders.push({
+            'Firma Adı': order.customerName,
+            'Telefon': order.customerPhone || 'Belirtilmemiş',
+            'Sipariş Tarihi': order.date,
+            'Stok Kodu': item.stockCode,
+            'Ürün': item.productName,
+            'Miktar': item.quantity,
+            'Birim': item.unit,
+            'Birim Fiyat (KDV Hariç)': item.price,
+            'KDV Oranı': `%${item.vatRate}`,
+            'Fiyat Türü': order.selectedPriceType === "beyaz" ? "Beyaz Fiyat" : "KDV Dahil",
+            'Birim Fiyat': order.selectedPriceType === "beyaz" ? 
+              item.whitePrice : 
+              (item.price * (1 + item.vatRate / 100)),
+            'Toplam Tutar': order.selectedPriceType === "beyaz" ? 
+              (item.whitePrice * item.quantity) : 
+              item.totalPrice
+          });
+        });
+      });
+      
+      // XLSX WorkSheet oluşturma
+      const worksheet = XLSX.utils.json_to_sheet(flattenedOrders);
+      
+      // Sütun genişliklerini ayarlama
+      const maxWidth = 20;
+      const colWidths = {};
+      Object.keys(flattenedOrders[0] || {}).forEach(key => {
+        colWidths[key] = Math.min(maxWidth, key.length + 2);
+      });
+      
+      worksheet['!cols'] = Object.keys(flattenedOrders[0] || {}).map(key => ({
+        wch: colWidths[key]
+      }));
+      
+      // WorkBook oluşturma
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Siparişler");
+      
+      // Dosyayı indirme
+      const currentDate = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(workbook, `Siparisler_${currentDate}.xlsx`);
+      
+      return true;
+    } catch (error) {
+      console.error("Excel dosyası oluşturulurken hata:", error);
+      alert("Excel dosyası oluşturulurken bir hata oluştu.");
+      return false;
+    }
+  };
 
   // Siparişleri müşteri ve tarih bazında gruplandırma
   const groupOrdersByCustomerAndDate = (ordersData) => {
@@ -161,7 +221,18 @@ function OrderHistory({ formatCurrency }) {
 
   return (
     <div className="order-history">
-      <h2>Sipariş Geçmişi</h2>
+      <div className="order-history-header">
+        <h2>Sipariş Geçmişi</h2>
+        {orders.length > 0 && (
+          <button 
+            className="excel-export-button"
+            onClick={() => exportOrdersToExcel(orders)}
+          >
+            Excel'e Aktar
+          </button>
+        )}
+      </div>
+      
       {orders.length === 0 ? (
         <p>Henüz sipariş bulunmuyor.</p>
       ) : (
