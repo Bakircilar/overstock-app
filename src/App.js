@@ -371,13 +371,12 @@ function App() {
       const ordersToSend = [];
       const updatedProducts = [...products];
 
-      // Önce sipariş oluşturulacak ürünleri sayalım
-      const orderableProductCount = products.filter(product => 
-        parseInt(orderQuantities[product.id] || "0", 10) > 0
-      ).length;
+      // Önce sipariş edilecek ürünlerin sayısını hesapla (loglama için kullanılabilir)
+      console.log(`Toplam ${products.filter(product => parseInt(orderQuantities[product.id] || "0", 10) > 0).length} ürün sipariş edildi`);
       
-      // Toplam komisyon değerini hesapla (sipariş onay modalında hesaplanan değeri kullan)
-      const totalCommissionAmount = commission ? commission.totalCommission : 0;
+      // Toplam komisyon değerini kullan (sipariş onay modalında hesaplanan değer)
+      const totalCommission = commission ? commission.totalCommission : 0;
+      console.log(`Toplam prim tutarı: ${formatCurrency(totalCommission)}`);
       
       for (const product of products) {
         const quantity = parseInt(orderQuantities[product.id] || "0", 10);
@@ -386,6 +385,15 @@ function App() {
           const commissionPrice = selectedPriceType === "kdvDahil" ? product.price : product.price * (1 + (product.vatRate / 200));
           const productTotal = commissionPrice * quantity;
           const productRatio = commission ? (productTotal / commission.orderAmount) : 0;
+          
+          // Prim detaylarını ayrı bir nesne olarak hazırla
+          const commissionDetails = {
+            baseCommission: commission ? commission.baseCommission * productRatio : 0,
+            orderBonus: commission ? commission.orderBonus * productRatio : 0,
+            ageBonus: commission ? commission.ageBonus * productRatio : 0,
+            totalCommission: commission ? commission.totalCommission * productRatio : 0,
+            hasDetails: true  // Prim detayları olup olmadığını belirten bayrak
+          };
           
           ordersToSend.push({
             customerName: customerName.trim(),
@@ -401,11 +409,14 @@ function App() {
             unit: product.unit,
             selectedPriceType,
             stockAge: product.stockAge,
-            // Her ürün için siparişteki oranına göre prim hesaplama
-            baseCommission: commission ? commission.baseCommission * productRatio : 0,
-            orderBonus: commission ? commission.orderBonus * productRatio : 0,
-            ageBonus: commission ? commission.ageBonus * productRatio : 0,
-            totalCommission: commission ? commission.totalCommission * productRatio : 0,
+            // Prim değerlerini ekle
+            baseCommission: commissionDetails.baseCommission,
+            orderBonus: commissionDetails.orderBonus,
+            ageBonus: commissionDetails.ageBonus,
+            totalCommission: commissionDetails.totalCommission,
+            hasCommissionDetails: commissionDetails.hasDetails,
+            // JSON olarak prim detayları (OrderHistory bileşeni için)
+            commissionDetailsJSON: JSON.stringify(commissionDetails),
             timestamp: new Date()
           });
           updatedProducts.find(p => p.id === product.id).stock -= quantity;
