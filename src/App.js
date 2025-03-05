@@ -487,8 +487,9 @@ function App() {
     ? totalOrderAmountWithVAT 
     : (selectedPriceType === "beyaz" ? totalWhitePriceAmount : 0);
 
-  // Filtrelenmiş ürünler
+  // Filtrelenmiş ürünler - stoğu sıfır olanları gösterme
   const filteredProducts = products.filter(product => 
+    product.stock > 0 && // Stoğu pozitif olanları göster
     (selectedCategory === "Tümü" || product.category === selectedCategory) &&
     (normalizeText(product.name).includes(normalizeText(searchQuery)) ||
      normalizeText(product.stockCode).includes(normalizeText(searchQuery)))
