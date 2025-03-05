@@ -113,6 +113,23 @@
   background-color: #2980b9;
 }
 
+/* Excel butonu için stil */
+.excel-button {
+  padding: 6px 12px;
+  background-color: #27ae60; /* Yeşil renk */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+}
+
+.excel-button:hover {
+  background-color: #2ecc71;
+}
+
 .downloaded-mark {
   color: #27ae60;
   font-weight: bold;

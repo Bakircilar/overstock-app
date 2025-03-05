@@ -47,7 +47,7 @@ function OrderHistory({ formatCurrency }) {
     fetchOrders();
   }, []);
 
-  // Excel dışa aktarma fonksiyonu
+  // Excel dışa aktarma fonksiyonu (tüm siparişler)
   const exportOrdersToExcel = (orders) => {
     try {
       // Tüm siparişleri düzleştirip Excel formatına uygun hale getiriyoruz
@@ -97,6 +97,67 @@ function OrderHistory({ formatCurrency }) {
       // Dosyayı indirme
       const currentDate = new Date().toISOString().slice(0, 10);
       XLSX.writeFile(workbook, `Siparisler_${currentDate}.xlsx`);
+      
+      return true;
+    } catch (error) {
+      console.error("Excel dosyası oluşturulurken hata:", error);
+      alert("Excel dosyası oluşturulurken bir hata oluştu.");
+      return false;
+    }
+  };
+
+  // Tek bir siparişi Excel'e aktarma
+  const exportSingleOrderToExcel = (order) => {
+    try {
+      // Siparişi düzleştirip Excel formatına uygun hale getiriyoruz
+      const flattenedOrder = [];
+      
+      order.items.forEach(item => {
+        flattenedOrder.push({
+          'Firma Adı': order.customerName,
+          'Telefon': order.customerPhone || 'Belirtilmemiş',
+          'Sipariş Tarihi': order.date,
+          'Stok Kodu': item.stockCode,
+          'Ürün': item.productName,
+          'Miktar': item.quantity,
+          'Birim': item.unit,
+          'Birim Fiyat (KDV Hariç)': item.price,
+          'KDV Oranı': `%${item.vatRate}`,
+          'Fiyat Türü': order.selectedPriceType === "beyaz" ? "Beyaz Fiyat" : "KDV Dahil",
+          'Birim Fiyat': order.selectedPriceType === "beyaz" ? 
+            item.whitePrice : 
+            (item.price * (1 + item.vatRate / 100)),
+          'Toplam Tutar': order.selectedPriceType === "beyaz" ? 
+            (item.whitePrice * item.quantity) : 
+            item.totalPrice
+        });
+      });
+      
+      // XLSX WorkSheet oluşturma
+      const worksheet = XLSX.utils.json_to_sheet(flattenedOrder);
+      
+      // Sütun genişliklerini ayarlama
+      const maxWidth = 20;
+      const colWidths = {};
+      Object.keys(flattenedOrder[0] || {}).forEach(key => {
+        colWidths[key] = Math.min(maxWidth, key.length + 2);
+      });
+      
+      worksheet['!cols'] = Object.keys(flattenedOrder[0] || {}).map(key => ({
+        wch: colWidths[key]
+      }));
+      
+      // WorkBook oluşturma
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Sipariş Detayı");
+      
+      // Dosyayı indirme
+      XLSX.writeFile(workbook, `${order.customerName}_siparis_${order.date.replace(/\//g, '-')}.xlsx`);
+      
+      // İndirilen siparişi işaretle - aynı PDF indirmedeki gibi işaretleme yapabiliriz
+      const newDownloaded = { ...downloadedOrders, [order.id]: true };
+      setDownloadedOrders(newDownloaded);
+      localStorage.setItem('downloadedOrders', JSON.stringify(newDownloaded));
       
       return true;
     } catch (error) {
@@ -254,6 +315,12 @@ function OrderHistory({ formatCurrency }) {
                     onClick={() => generateOrderPDF(order)}
                   >
                     PDF İndir
+                  </button>
+                  <button
+                    className="excel-button"
+                    onClick={() => exportSingleOrderToExcel(order)}
+                  >
+                    Excel İndir
                   </button>
                   {downloadedOrders[order.id] && (
                     <span className="downloaded-mark">✓ İndirildi</span>
