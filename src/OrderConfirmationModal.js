@@ -12,15 +12,10 @@ const OrderConfirmationModal = ({
   totalOrderAmount, 
   totalOrderAmountWithVAT,
   totalWhitePriceAmount,
-  selectedPriceType, // Seçilen fiyat tipi
+  selectedPriceType,
   formatCurrency 
 }) => {
   if (!show) return null;
-
-  // Seçilen fiyat tipine göre görüntülenecek toplam
-  const selectedTotal = selectedPriceType === "kdvDahil" 
-    ? totalOrderAmountWithVAT 
-    : totalWhitePriceAmount;
 
   return (
     <div className="modal-overlay">
