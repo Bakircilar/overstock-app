@@ -2,10 +2,14 @@
 import { supabase } from './supabaseClient';
 import Papa from 'papaparse';
 
-// Virgüllü ondalıkları noktaya çevirip parseFloat ile sayıya dönüştürür.
+// Türkçe formatındaki sayıları doğru şekilde parse etmek için geliştirilmiş fonksiyon
+// Binlik ayracı noktaları (.) kaldırır ve ondalık ayracı virgülü (,) noktaya (.) çevirir
 function parseTurkishFloat(val) {
   if (!val) return 0;
-  return parseFloat(val.replace(',', '.'));
+  if (typeof val !== 'string') return parseFloat(val) || 0;
+  
+  // Önce binlik ayracı noktaları kaldır, sonra virgülü noktaya çevir
+  return parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
 }
 
 const uploadProductsFromCSV = async (file) => {
@@ -15,21 +19,28 @@ const uploadProductsFromCSV = async (file) => {
       skipEmptyLines: true,
       delimiter: ";", // Noktalı virgül ayracı kullanıyoruz
       complete: async (results) => {
+        console.log("CSV Verisi:", results.data); // Gelen verileri kontrol için logla
+        
         // CSV'den gelen satırları Supabase'e uygun formata dönüştür
-        const products = results.data.map(row => ({
-          stockCode: row.stockCode || '',
-          name: row.name || '',
-          price: parseTurkishFloat(row.price),         // Virgüllü ondalıklar düzeltilir
-          stock: parseInt(row.stock) || 0,
-          category: row.category || 'Diğer',
-          vatRate: parseTurkishFloat(row.vatRate),     // Virgüllü ondalıklar düzeltilir
-          unit: row.unit || 'Adet',
-          entryCost: parseTurkishFloat(row.entryCost), // Virgüllü ondalıklar düzeltilir
-          latestCost: parseTurkishFloat(row.latestCost),
-          // Tarih formatını CSV'de YYYY-MM-DD olarak tuttuğunuzu varsayıyoruz
-          entryDate: row.entryDate || new Date().toISOString().split('T')[0],
-          latestCostDate: row.latestCostDate || new Date().toISOString().split('T')[0]
-        }));
+        const products = results.data.map(row => {
+          const product = {
+            stockCode: row.stockCode || '',
+            name: row.name || '',
+            price: parseTurkishFloat(row.price),
+            stock: parseInt(row.stock) || 0,
+            category: row.category || 'Diğer',
+            vatRate: parseTurkishFloat(row.vatRate),
+            unit: row.unit || 'Adet',
+            entryCost: parseTurkishFloat(row.entryCost),
+            latestCost: parseTurkishFloat(row.latestCost),
+            // Tarih formatını CSV'de YYYY-MM-DD olarak tuttuğunuzu varsayıyoruz
+            entryDate: row.entryDate || new Date().toISOString().split('T')[0],
+            latestCostDate: row.latestCostDate || new Date().toISOString().split('T')[0]
+          };
+          
+          console.log(`${row.name} fiyatı: ${row.price} -> ${product.price}`); // Dönüşümü kontrol et
+          return product;
+        });
 
         try {
           // 1) Mevcut ürünleri temizle
