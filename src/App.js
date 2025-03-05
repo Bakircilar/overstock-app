@@ -8,7 +8,7 @@ import OrderHistory from './OrderHistory'; // Sipariş geçmişi bileşeni
 import './FloatingOrderPanel.css'; // Yeni CSS dosyası
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import './App.css';  // Responsive stiller için CSS dosyasını ekledik
+import './App.css';  // Sticky thead ve diğer responsive stiller bu dosyada
 
 // Formatlama fonksiyonu: Sayısal değerleri Türkçe biçimde, binlik ayırıcı ve iki ondalık ile gösterir.
 function formatCurrency(amount) {
@@ -32,15 +32,14 @@ function calculateCommission(orderAmount, stockAge) {
     orderBonus = orderAmount * 0.01; // 50,000 TL üzeri siparişlerde ek %1
   }
   
-  // Stok yaşına göre ek prim
+  // Stok yaşı prim
   let ageBonus = 0;
   if (stockAge >= 180) {
     ageBonus = orderAmount * 0.015; // 180+ gün bekleyen stoklar için ek %1.5
   } else if (stockAge >= 90) {
-    ageBonus = orderAmount * 0.01; // 90+ gün bekleyen stoklar için ek %1
+    ageBonus = orderAmount * 0.01;  // 90+ gün bekleyen stoklar için ek %1
   }
   
-  // Toplam prim
   const totalCommission = baseCommission + orderBonus + ageBonus;
   
   return {
@@ -61,12 +60,13 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  
   // Yeni state değişkenleri
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [orderToConfirm, setOrderToConfirm] = useState([]);
-  const [showOrderPanel, setShowOrderPanel] = useState(false); // Panel görünürlüğü için
-  const [selectedPriceType, setSelectedPriceType] = useState(null); // Fiyat tipi seçimi için, başlangıçta null
-  const [commission, setCommission] = useState(null); // Prim bilgileri için
+  const [showOrderPanel, setShowOrderPanel] = useState(false); // Panel görünürlüğü
+  const [selectedPriceType, setSelectedPriceType] = useState(null); // Fiyat tipi
+  const [commission, setCommission] = useState(null); // Prim bilgileri
 
   // Stok için düşük seviye eşiği
   const LOW_STOCK_THRESHOLD = 5;
@@ -103,14 +103,14 @@ function App() {
           category: item.category || "Diğer",
           vatRate: item.vatRate ? parseFloat(item.vatRate) : 18,
           unit: item.unit || "Adet",
-          // Yeni alanlar
           entryCost: item.entryCost ? parseFloat(item.entryCost) : 0,
           latestCost: item.latestCost ? parseFloat(item.latestCost) : 0,
           entryDate: item.entryDate || new Date().toISOString().split('T')[0],
           latestCostDate: item.latestCostDate || new Date().toISOString().split('T')[0],
-          // Stok yaşını hesapla (gün olarak)
-          stockAge: item.entryDate ? 
-            Math.floor((new Date() - new Date(item.entryDate)) / (1000 * 60 * 60 * 24)) : 0
+          // Stok yaşı (gün)
+          stockAge: item.entryDate 
+            ? Math.floor((new Date() - new Date(item.entryDate)) / (1000 * 60 * 60 * 24))
+            : 0
         }));
         
         setProducts(productList);
@@ -122,7 +122,7 @@ function App() {
     }
     fetchProducts();
 
-    // Gerçek zamanlı stok takibi için Supabase kanalı oluştur
+    // Gerçek zamanlı stok takibi
     const stockSubscription = supabase
       .channel('product-stock-changes')
       .on('postgres_changes', {
@@ -130,21 +130,19 @@ function App() {
         schema: 'public',
         table: 'products',
       }, (payload) => {
-        // Stok değişikliği olduğunda
         const updatedProduct = payload.new;
         
         // Mevcut ürünleri güncelle
         setProducts(prevProducts => 
           prevProducts.map(product => 
-            product.id === updatedProduct.id ? 
-              { 
-                ...product, 
-                stock: updatedProduct.stock,
-                // Güncel maliyet ve tarih bilgilerini de güncelle
-                latestCost: updatedProduct.latestCost,
-                latestCostDate: updatedProduct.latestCostDate
-              } : 
-              product
+            product.id === updatedProduct.id 
+              ? { 
+                  ...product, 
+                  stock: updatedProduct.stock,
+                  latestCost: updatedProduct.latestCost,
+                  latestCostDate: updatedProduct.latestCostDate
+                }
+              : product
           )
         );
         
@@ -155,21 +153,19 @@ function App() {
             [updatedProduct.id]: updatedProduct.stock 
           }));
           
-          // Stok değişikliği bildirimi göster
           if (updatedProduct.stock <= 0) {
             alert(`"${updatedProduct.name}" ürünü tükendi. Sepetiniz güncellendi.`);
           } else {
-            alert(`"${updatedProduct.name}" ürününün stok miktarı değişti. Yeni stok: ${updatedProduct.stock}. Sepetiniz güncellendi.`);
+            alert(`"${updatedProduct.name}" ürününün stok miktarı değişti. Yeni stok: ${updatedProduct.stock}.`);
           }
         }
       })
       .subscribe();
 
-    // Component unmount olduğunda abonelikten çık
     return () => {
       stockSubscription.unsubscribe();
     };
-  }, [orderQuantities]); // orderQuantities bağımlılığını ekledik
+  }, [orderQuantities]);
 
   const handleQuantityChange = (productId, value, maxStock) => {
     let quantity = parseInt(value, 10);
@@ -184,36 +180,34 @@ function App() {
       alert("Lütfen firma adınızı girin!");
       return;
     }
-    
     if (!customerPhone.trim()) {
       alert("Lütfen telefon numaranızı girin!");
       return;
     }
-    
-    // Fiyat tipi kontrolü ekliyoruz
     if (!selectedPriceType) {
       alert("Lütfen fiyat türü seçin!");
       return;
     }
 
     const itemsToOrder = [];
-    let totalOrderValue = 0;
+    let totalCommissionValue = 0; // Prim hesaplaması için kullanılacak değer
     let averageStockAge = 0;
     let totalOrderedItems = 0;
     
     for (const product of products) {
       const quantity = parseInt(orderQuantities[product.id] || "0", 10);
       if (quantity > 0 && quantity <= product.stock) {
-        // Seçilen fiyat tipine göre tutar hesaplama
         const priceWithVAT = product.price * (1 + product.vatRate / 100);
         const whitePrice = product.price * (1 + product.vatRate / 200);
         const selectedPrice = selectedPriceType === "kdvDahil" ? priceWithVAT : whitePrice;
         
-        // Toplam sipariş değerine ekle
         const itemTotal = selectedPrice * quantity;
-        totalOrderValue += itemTotal;
         
-        // Stok yaşı toplamını güncelle
+        // Prim hesaplaması için: KDV dahil seçildiğinde KDV hariç fiyat, beyaz fiyat seçildiğinde beyaz fiyat
+        const commissionPrice = selectedPriceType === "kdvDahil" ? product.price : whitePrice;
+        totalCommissionValue += commissionPrice * quantity;
+        
+        // Stok yaşını ağırlıklı ortalama için topla
         averageStockAge += product.stockAge * quantity;
         totalOrderedItems += quantity;
         
@@ -221,16 +215,18 @@ function App() {
           id: product.id,
           stockCode: product.stockCode,
           name: product.name,
-          quantity: quantity,
+          quantity,
           price: product.price,
           unit: product.unit,
           vatRate: product.vatRate,
           totalPrice: product.price * quantity * (1 + product.vatRate / 100),
           totalWhitePrice: whitePrice * quantity,
-          selectedPriceType: selectedPriceType,
-          selectedPrice: selectedPrice,
-          totalSelectedPrice: selectedPrice * quantity,
-          stockAge: product.stockAge
+          selectedPriceType,
+          selectedPrice,
+          totalSelectedPrice: itemTotal,
+          stockAge: product.stockAge,
+          // Her ürün için prim bilgisini de ekleyelim
+          commissionPrice
         });
       }
     }
@@ -240,45 +236,45 @@ function App() {
       return;
     }
     
-    // Ortalama stok yaşını hesapla
-    averageStockAge = totalOrderedItems > 0 ? Math.round(averageStockAge / totalOrderedItems) : 0;
+    averageStockAge = totalOrderedItems > 0 
+      ? Math.round(averageStockAge / totalOrderedItems) 
+      : 0;
     
-    // Prim hesapla
-    const calculatedCommission = calculateCommission(totalOrderValue, averageStockAge);
+    const calculatedCommission = calculateCommission(totalCommissionValue, averageStockAge);
+    // Toplam tutarı commission nesnesine ekleyelim ki sonradan kullanabilelim
+    calculatedCommission.orderAmount = totalCommissionValue;
     setCommission(calculatedCommission);
 
     setOrderToConfirm(itemsToOrder);
     setShowConfirmationModal(true);
   };
 
-  // PDF oluşturma fonksiyonu - düzeltilmiş hali
+  // PDF oluşturma fonksiyonu
   const generateOrderPDF = () => {
     try {
-      // PDF oluştur
       const doc = new jsPDF();
       
-      // PDF Başlığı
-      doc.setFontSize(16); // Daha küçük başlık
+      doc.setFontSize(16);
       doc.text("Sipariş Detayları", 14, 22);
       
-      // Firma Bilgileri
-      doc.setFontSize(10); // Daha küçük yazı
+      doc.setFontSize(10);
       doc.text(`Firma: ${customerName}`, 14, 32);
-      doc.text(`Telefon: ${customerPhone}`, 14, 38); 
+      doc.text(`Telefon: ${customerPhone}`, 14, 38);
       doc.text(`Sipariş Tarihi: ${new Date().toLocaleDateString('tr-TR')}`, 14, 44);
-      doc.text(`Fiyat Türü: ${selectedPriceType === "kdvDahil" ? "KDV Dahil Fiyat" : "Beyaz Fiyat"}`, 14, 50);
+      doc.text(
+        `Fiyat Türü: ${selectedPriceType === "kdvDahil" ? "KDV Dahil Fiyat" : "Beyaz Fiyat"}`,
+        14,
+        50
+      );
       
-      // Sipariş Tablosu
       const tableColumn = ["Stok Kodu", "Ürün", "Miktar", "Birim", "Birim Fiyat", "Toplam"];
       const tableRows = [];
 
       orderToConfirm.forEach(item => {
-        const displayPrice = selectedPriceType === "kdvDahil" ? 
-          item.price * (1 + item.vatRate / 100) :
-          item.price * (1 + item.vatRate / 200);
-
+        const displayPrice = item.selectedPriceType === "kdvDahil"
+          ? item.price * (1 + item.vatRate / 100)
+          : item.price * (1 + item.vatRate / 200);
         const totalDisplayPrice = displayPrice * item.quantity;
-
         const itemData = [
           item.stockCode,
           item.name,
@@ -290,27 +286,24 @@ function App() {
         tableRows.push(itemData);
       });
 
-      // autoTable kütüphanesi kullanımı
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
         startY: 55,
         theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 2 }, // Küçük yazı
+        styles: { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [60, 60, 60] }
       });
       
-      // Toplam Tutar Bilgileri - Daha sağa yaslı ve küçük
       const finalY = doc.lastAutoTable.finalY + 10;
       
-      // Seçilen fiyat tipine göre toplam tutar gösterme
       if (selectedPriceType === "kdvDahil") {
         doc.text(`KDV Dahil Toplam: ${formatCurrency(totalOrderAmountWithVAT)}`, 130, finalY);
       } else {
         doc.text(`Beyaz Fiyat Toplam: ${formatCurrency(totalWhitePriceAmount)}`, 130, finalY);
       }
       
-      // Admin ise prim bilgilerini ekle
+      // Admin ise prim bilgileri ekle
       if (isAdmin && commission) {
         doc.text(`Satıcı Primi: ${formatCurrency(commission.totalCommission)}`, 130, finalY + 7);
         doc.text(`- Temel Prim (%2): ${formatCurrency(commission.baseCommission)}`, 130, finalY + 14);
@@ -322,35 +315,28 @@ function App() {
         }
       }
       
-      // PDF'i kaydet
       doc.save(`${customerName}_siparis_${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (error) {
       console.error("PDF oluşturma hatası:", error);
-      alert("PDF oluşturulurken bir hata oluştu. Sipariş kaydedildi fakat PDF indirilemedi.");
+      alert("PDF oluşturulurken bir hata oluştu.");
     }
   };
 
-  // Sipariş onaylandığında çalışacak fonksiyon - gerçek zamanlı stok kontrolü ile
+  // Sipariş onaylandığında çalışacak fonksiyon
   const confirmAndSubmitOrder = async () => {
     setShowConfirmationModal(false);
     
     try {
-      // Sipariş edilecek ürünlerin listesini hazırlayalım
+      // Güncel stok kontrolü
       const productsToOrder = [];
       for (const product of products) {
         const quantity = parseInt(orderQuantities[product.id] || "0", 10);
         if (quantity > 0) {
-          productsToOrder.push({
-            id: product.id,
-            requestedQuantity: quantity
-          });
+          productsToOrder.push({ id: product.id, requestedQuantity: quantity });
         }
       }
       
-      // Stokta olmayan ürünleri kontrol edeceğiz
       const stockErrors = [];
-      
-      // Siparişe eklenecek ürünlerin güncel stok durumlarını çekelim
       for (const productToOrder of productsToOrder) {
         const { data, error } = await supabase
           .from('products')
@@ -359,8 +345,8 @@ function App() {
           .single();
         
         if (error) {
-          console.error("Stok kontrolü sırasında hata:", error);
-          stockErrors.push(`Ürün durumu kontrol edilemedi: ${error.message}`);
+          console.error("Stok kontrolü hatası:", error);
+          stockErrors.push(`Ürün kontrol edilemedi: ${error.message}`);
           continue;
         }
         
@@ -369,52 +355,57 @@ function App() {
           continue;
         }
         
-        // Güncel stok kontrolü
         if (productToOrder.requestedQuantity > data.stock) {
-          stockErrors.push(`"${data.name}" ürününden istediğiniz miktarda stok kalmadı. Güncel stok: ${data.stock}`);
-          
-          // State'i güncelle
-          setProducts(prevProducts => 
-            prevProducts.map(p => 
-              p.id === data.id ? { ...p, stock: data.stock } : p
-            )
+          stockErrors.push(
+            `"${data.name}" ürününden istediğiniz miktarda stok kalmadı. Güncel stok: ${data.stock}`
           );
         }
       }
       
-      // Stok hatası varsa göster ve işlemi durdur
       if (stockErrors.length > 0) {
         alert(`Siparişiniz işlenemiyor:\n\n${stockErrors.join('\n\n')}\n\nLütfen sepetinizi güncelleyin.`);
         return;
       }
       
-      // Stok kontrolü geçtiyse işleme devam et...
-      
+      // Stok uygunsa sipariş oluştur
       const ordersToSend = [];
       const updatedProducts = [...products];
 
+      // Önce sipariş oluşturulacak ürünleri sayalım
+      const orderableProductCount = products.filter(product => 
+        parseInt(orderQuantities[product.id] || "0", 10) > 0
+      ).length;
+      
+      // Toplam komisyon değerini hesapla (sipariş onay modalında hesaplanan değeri kullan)
+      const totalCommissionAmount = commission ? commission.totalCommission : 0;
+      
       for (const product of products) {
         const quantity = parseInt(orderQuantities[product.id] || "0", 10);
         if (quantity > 0) {
+          // Sipariş edilen miktara ve ürün fiyatına göre bu ürüne düşen prim
+          const commissionPrice = selectedPriceType === "kdvDahil" ? product.price : product.price * (1 + (product.vatRate / 200));
+          const productTotal = commissionPrice * quantity;
+          const productRatio = commission ? (productTotal / commission.orderAmount) : 0;
+          
           ordersToSend.push({
             customerName: customerName.trim(),
             customerPhone: customerPhone.trim(),
             stockCode: product.stockCode,
             productId: product.id,
             productName: product.name,
-            quantity: quantity,
+            quantity,
             price: product.price,
             vatRate: product.vatRate,
             whitePrice: product.price * (1 + (product.vatRate / 200)),
             totalPrice: product.price * quantity * (1 + product.vatRate / 100),
             unit: product.unit,
-            selectedPriceType: selectedPriceType,
+            selectedPriceType,
             stockAge: product.stockAge,
-            // Prim bilgilerini de ekle
-            baseCommission: commission ? commission.baseCommission / ordersToSend.length : 0,
-            orderBonus: commission ? commission.orderBonus / ordersToSend.length : 0,
-            ageBonus: commission ? commission.ageBonus / ordersToSend.length : 0,
-            totalCommission: commission ? commission.totalCommission / ordersToSend.length : 0,
+            // Her ürün için siparişteki oranına göre prim hesaplama
+            baseCommission: commission ? commission.baseCommission * productRatio : 0,
+            orderBonus: commission ? commission.orderBonus * productRatio : 0,
+            ageBonus: commission ? commission.ageBonus * productRatio : 0,
+            totalCommission: commission ? commission.totalCommission * productRatio : 0,
             timestamp: new Date()
           });
           updatedProducts.find(p => p.id === product.id).stock -= quantity;
@@ -427,11 +418,13 @@ function App() {
 
       if (error) {
         console.error("Sipariş ekleme hatası:", error);
+        console.error("Hata detayları:", error.details);
+        console.error("Hata mesajı:", error.message);
         alert("Sipariş eklenirken hata oluştu!");
         return;
       }
 
-      // Stokları azalt
+      // Stok güncelle
       for (const product of products) {
         const quantity = parseInt(orderQuantities[product.id] || "0", 10);
         if (quantity > 0) {
@@ -464,6 +457,7 @@ function App() {
     }
   };
 
+  // Toplamlar
   const totalOrderAmount = Object.entries(orderQuantities).reduce((acc, [productId, quantity]) => {
     const product = products.find(p => p.id === productId);
     return acc + (product ? product.price * parseInt(quantity || "0", 10) : 0);
@@ -481,25 +475,23 @@ function App() {
     return acc + (whitePrice * parseInt(quantity || "0", 10));
   }, 0);
   
-  // Seçilen fiyat tipine göre toplam tutar
-  const totalSelectedAmount = selectedPriceType === "kdvDahil" ? 
-    totalOrderAmountWithVAT : 
-    (selectedPriceType === "beyaz" ? totalWhitePriceAmount : 0);
+  const totalSelectedAmount = selectedPriceType === "kdvDahil" 
+    ? totalOrderAmountWithVAT 
+    : (selectedPriceType === "beyaz" ? totalWhitePriceAmount : 0);
 
-  // Filtrelenmiş ürünleri hesapla
-  const filteredProducts = products
-    .filter(product => 
-      (selectedCategory === "Tümü" || product.category === selectedCategory) &&
-      (normalizeText(product.name).includes(normalizeText(searchQuery)) || 
-       normalizeText(product.stockCode).includes(normalizeText(searchQuery)))
-    );
+  // Filtrelenmiş ürünler
+  const filteredProducts = products.filter(product => 
+    (selectedCategory === "Tümü" || product.category === selectedCategory) &&
+    (normalizeText(product.name).includes(normalizeText(searchQuery)) ||
+     normalizeText(product.stockCode).includes(normalizeText(searchQuery)))
+  );
 
   // Toplam sipariş edilmiş ürün sayısı
-  const totalOrderedItems = Object.values(orderQuantities).reduce((sum, qty) => sum + (parseInt(qty) || 0), 0);
+  const totalOrderedItems = Object.values(orderQuantities)
+    .reduce((sum, qty) => sum + (parseInt(qty) || 0), 0);
 
   return (
-    <div style={{ padding: "10px", paddingBottom: "80px" }}> {/* Alt panel için ekstra padding */}
-      {/* Header Bölümü: Üstte sol kısımda logonuz ve site başlığı */}
+    <div style={{ padding: "10px", paddingBottom: "80px" }}>
       <header style={{ display: "flex", alignItems: "center", marginBottom: "20px" }}>
         <img 
           src="/logo.png" 
@@ -527,7 +519,11 @@ function App() {
       {isAdmin && (
         <div style={{ textAlign: "center", marginBottom: "10px" }}>
           <h3>Ürünleri Toplu Yükle</h3>
-          <input type="file" accept=".csv" onChange={(e) => uploadProductsFromCSV(e.target.files[0])} />
+          <input 
+            type="file" 
+            accept=".csv" 
+            onChange={(e) => uploadProductsFromCSV(e.target.files[0])} 
+          />
         </div>
       )}
       
@@ -554,13 +550,13 @@ function App() {
         />
       </div>
 
-      {/* Süzülen ürün sayısını gösterme */}
       <div style={{ margin: "10px 0", textAlign: "left" }}>
         <p>{filteredProducts.length} ürün gösteriliyor</p>
       </div>
 
-      <div className="table-container" style={{ overflowX: "auto" }}>
-        <table border="1" style={{ width: "100%", minWidth: "700px", textAlign: "center" }}>
+      {/* Sticky thead için sadece className="table-container" kullandık, inline style yok */}
+      <div className="table-container">
+        <table border="1">
           <thead>
             <tr>
               <th>Stok Kodu</th>
@@ -570,7 +566,7 @@ function App() {
               <th>Fiyat (KDV Dahil)</th>
               <th>Beyaz Fiyat</th>
               <th>Stok</th>
-              {isAdmin && <th>Stok Yaşı</th>} {/* Admin için stok yaşı gösterimi */}
+              {isAdmin && <th>Stok Yaşı</th>}
               <th>Sipariş Miktarı</th>
               <th>Tutar (KDV Dahil)</th>
               <th>Beyaz Fiyat Tutarı</th>
@@ -589,15 +585,15 @@ function App() {
                   <td>{formatCurrency(product.price)}</td>
                   <td>{formatCurrency(product.price * (1 + product.vatRate / 100))}</td>
                   <td>{formatCurrency(product.price * (1 + product.vatRate / 200))}</td>
-                  {/* Stok hücresi için renk kodlaması */}
-                  <td style={{ 
-                    backgroundColor: product.stock <= LOW_STOCK_THRESHOLD ? '#ffcccc' : 'transparent',
-                    color: product.stock <= LOW_STOCK_THRESHOLD ? '#cc0000' : 'inherit',
-                    fontWeight: product.stock <= LOW_STOCK_THRESHOLD ? 'bold' : 'normal'
-                  }}>
+                  <td 
+                    style={{ 
+                      backgroundColor: product.stock <= LOW_STOCK_THRESHOLD ? '#ffcccc' : 'transparent',
+                      color: product.stock <= LOW_STOCK_THRESHOLD ? '#cc0000' : 'inherit',
+                      fontWeight: product.stock <= LOW_STOCK_THRESHOLD ? 'bold' : 'normal'
+                    }}
+                  >
                     {product.stock}
                   </td>
-                  {/* Admin için stok yaşı gösterimi */}
                   {isAdmin && <td>{product.stockAge} gün</td>}
                   <td>
                     <input
@@ -627,9 +623,9 @@ function App() {
             <div className="panel-total">
               <span>Toplam:</span>
               <strong>
-                {selectedPriceType ? 
-                  formatCurrency(totalSelectedAmount) : 
-                  "Lütfen fiyat türü seçin"}
+                {selectedPriceType 
+                  ? formatCurrency(totalSelectedAmount) 
+                  : "Lütfen fiyat türü seçin"}
               </strong>
             </div>
             <button 
@@ -645,7 +641,10 @@ function App() {
               {/* Firma Adı ve Telefon Girişi */}
               <div className="panel-inputs">
                 <div className="input-group">
-                  <label><strong>Firma Adı:</strong> <span className="required-mark">*</span></label>
+                  <label>
+                    <strong>Firma Adı:</strong> 
+                    <span className="required-mark">*</span>
+                  </label>
                   <input
                     type="text"
                     placeholder="Firma Adınızı girin"
@@ -656,7 +655,10 @@ function App() {
                 </div>
                 
                 <div className="input-group">
-                  <label><strong>Telefon Numaranız:</strong> <span className="required-mark">*</span></label>
+                  <label>
+                    <strong>Telefon Numaranız:</strong> 
+                    <span className="required-mark">*</span>
+                  </label>
                   <input
                     type="tel"
                     placeholder="530 178 35 70"
@@ -670,7 +672,8 @@ function App() {
               {/* Fiyat Tipi Seçimi */}
               <div className="price-type-selector">
                 <div className="selector-label">
-                  <strong>Fiyat Türü Seçimi:</strong> <span className="required-mark">*</span>
+                  <strong>Fiyat Türü Seçimi:</strong> 
+                  <span className="required-mark">*</span>
                 </div>
                 <div className="radio-group">
                   <label className="radio-label">
@@ -715,7 +718,6 @@ function App() {
 
       <WhatsAppWidget />
 
-      {/* Sipariş onay modalı */}
       <OrderConfirmationModal 
         show={showConfirmationModal}
         onClose={() => setShowConfirmationModal(false)}

@@ -49,16 +49,28 @@ header h1 {
 
 /* Tablo ve Form Alanları */
 .table-container {
+  /* Yüksekliği istediğin gibi ayarlayabilirsin (örn: 500px, 600px vb.) */
+  max-height: 600px;
+  overflow-y: auto;
   overflow-x: auto;
+  /* Kenarlık, padding vb. istersen ekleyebilirsin */
 }
 
+/* Sticky thead ayarları */
 table {
+  border-collapse: separate; 
+  border-spacing: 0;
   width: 100%;
-  border-collapse: collapse;
-  margin: 20px 0;
-  font-size: 1rem;
 }
 
+table thead th {
+  position: sticky;
+  top: 0;
+  background-color: #fff; /* Başlıkların arka planı */
+  z-index: 2; /* İçeriklerin üstünde kalsın */
+}
+
+/* Sütunlar ve hücreler */
 table, th, td {
   border: 1px solid #ddd;
 }
@@ -66,6 +78,7 @@ table, th, td {
 th, td {
   padding: 8px;
   text-align: center;
+  /* En azından thead ile aynı genişliği korumak için sabit boyut veya min-width kullanabilirsin */
 }
 
 /* Responsive Ayarlar: Ekran genişliği 768px ve altı için */
@@ -76,8 +89,8 @@ th, td {
   }
   
   header {
-    flex-direction: column; /* Elemanları dikey sırala */
-    align-items: center;    /* Elemanları ortala */
+    flex-direction: column;
+    align-items: center;
     justify-content: center;
   }
   
@@ -131,5 +144,190 @@ th, td {
   .whatsapp-button svg {
     width: 30px;
     height: 30px;
+  }
+}
+
+/* Floating Sipariş Paneli */
+.floating-order-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #fff;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 900;
+  border-top: 1px solid #e0e0e0;
+}
+
+.panel-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  background-color: #f5f5f5;
+}
+
+.panel-items-count {
+  font-size: 14px;
+  color: #666;
+}
+
+.panel-total {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.panel-total strong {
+  font-size: 16px;
+  color: #2c3e50;
+}
+
+.panel-complete-button {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.panel-complete-button:hover {
+  background-color: #2980b9;
+}
+
+.panel-details {
+  padding: 15px;
+  background-color: white;
+  border-top: 1px solid #eee;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.panel-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.input-group {
+  flex: 1;
+  min-width: 250px;
+}
+
+.input-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #333;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.price-type-selector {
+  margin-bottom: 15px;
+}
+
+.selector-label {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #333;
+}
+
+.radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.radio-label input {
+  cursor: pointer;
+}
+
+.send-order-button {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  background-color: #27ae60;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.send-order-button:hover {
+  background-color: #2ecc71;
+}
+
+/* Zorunlu alan işaretlemeleri */
+.required-mark {
+  color: #e74c3c;
+  margin-left: 3px;
+}
+
+.price-type-warning {
+  color: #e74c3c;
+  font-size: 12px;
+  margin-top: 5px;
+  font-style: italic;
+}
+
+.radio-label input:required {
+  box-shadow: 0 0 0 1px #e74c3c;
+}
+
+.radio-label input:required:checked {
+  box-shadow: none;
+}
+
+/* Mobil uyumluluk (panel) */
+@media (max-width: 768px) {
+  .panel-summary {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+  
+  .panel-complete-button {
+    width: 100%;
+  }
+  
+  .input-group {
+    min-width: 100%;
+  }
+  
+  .radio-group {
+    flex-direction: column;
+    gap: 10px;
   }
 }

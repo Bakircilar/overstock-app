@@ -200,7 +200,8 @@ function OrderHistory({ formatCurrency }) {
           baseCommission: 0,
           orderBonus: 0,
           ageBonus: 0,
-          totalCommission: 0
+          totalCommission: 0,
+          hasCommissionDetails: false
         };
       }
       
@@ -214,6 +215,11 @@ function OrderHistory({ formatCurrency }) {
       orderGroups[key].orderBonus += order.orderBonus || 0;
       orderGroups[key].ageBonus += order.ageBonus || 0;
       orderGroups[key].totalCommission += order.totalCommission || 0;
+      
+      // Prim detayları varsa işaretle (App.js'den gelen bayrak)
+      if (order.hasCommissionDetails) {
+        orderGroups[key].hasCommissionDetails = true;
+      }
     });
 
     // Objeyi diziye çevirip en yeni siparişler üstte olacak şekilde sırala
@@ -369,19 +375,18 @@ function OrderHistory({ formatCurrency }) {
                 )}
                 
                 {/* Prim bilgileri - Sadece admin */}
-                {(order.totalCommission > 0 || order.baseCommission > 0 || order.orderBonus > 0 || order.ageBonus > 0) && (
+                {order.totalCommission > 0 && (
                   <div className="commission-info">
                     <p><strong>Satıcı Primi:</strong> {formatCurrency(order.totalCommission || 0)}</p>
-                    {(order.orderBonus > 0 || order.ageBonus > 0) && (
-                      <details>
-                        <summary>Prim Detayları</summary>
-                        <div className="commission-details">
-                          <p>Temel Prim: {formatCurrency(order.baseCommission || 0)}</p>
-                          {order.orderBonus > 0 && <p>Sipariş Tutarı Primi: {formatCurrency(order.orderBonus)}</p>}
-                          {order.ageBonus > 0 && <p>Stok Yaşı Primi: {formatCurrency(order.ageBonus)}</p>}
-                        </div>
-                      </details>
-                    )}
+                    {/* Koşulu kaldırarak her zaman detayların görünmesini sağlıyoruz */}
+                    <details open>
+                      <summary>Prim Detayları</summary>
+                      <div className="commission-details">
+                        <p>Temel Prim: {formatCurrency(order.baseCommission || 0)}</p>
+                        <p>Sipariş Tutarı Primi: {formatCurrency(order.orderBonus || 0)}</p>
+                        <p>Stok Yaşı Primi: {formatCurrency(order.ageBonus || 0)}</p>
+                      </div>
+                    </details>
                   </div>
                 )}
               </div>
