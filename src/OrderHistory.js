@@ -71,7 +71,11 @@ function OrderHistory({ formatCurrency }) {
               (item.price * (1 + item.vatRate / 100)),
             'Toplam Tutar': order.selectedPriceType === "beyaz" ? 
               (item.whitePrice * item.quantity) : 
-              item.totalPrice
+              item.totalPrice,
+            'Temel Prim': item.baseCommission ? formatCurrency(item.baseCommission) : '-',
+            'Sipariş Tutarı Primi': item.orderBonus ? formatCurrency(item.orderBonus) : '-',
+            'Stok Yaşı Primi': item.ageBonus ? formatCurrency(item.ageBonus) : '-',
+            'Toplam Prim': item.totalCommission ? formatCurrency(item.totalCommission) : '-'
           });
         });
       });
@@ -129,7 +133,11 @@ function OrderHistory({ formatCurrency }) {
             (item.price * (1 + item.vatRate / 100)),
           'Toplam Tutar': order.selectedPriceType === "beyaz" ? 
             (item.whitePrice * item.quantity) : 
-            item.totalPrice
+            item.totalPrice,
+          'Temel Prim': item.baseCommission ? formatCurrency(item.baseCommission) : '-',
+          'Sipariş Tutarı Primi': item.orderBonus ? formatCurrency(item.orderBonus) : '-',
+          'Stok Yaşı Primi': item.ageBonus ? formatCurrency(item.ageBonus) : '-',
+          'Toplam Prim': item.totalCommission ? formatCurrency(item.totalCommission) : '-'
         });
       });
       
@@ -187,7 +195,12 @@ function OrderHistory({ formatCurrency }) {
           items: [],
           totalAmount: 0,
           totalAmountWithVAT: 0,
-          totalWhitePrice: 0
+          totalWhitePrice: 0,
+          // Prim alanları
+          baseCommission: 0,
+          orderBonus: 0,
+          ageBonus: 0,
+          totalCommission: 0
         };
       }
       
@@ -195,6 +208,12 @@ function OrderHistory({ formatCurrency }) {
       orderGroups[key].totalAmount += order.price * order.quantity;
       orderGroups[key].totalAmountWithVAT += order.totalPrice;
       orderGroups[key].totalWhitePrice += order.whitePrice * order.quantity;
+      
+      // Prim toplamlarını güncelle
+      orderGroups[key].baseCommission += order.baseCommission || 0;
+      orderGroups[key].orderBonus += order.orderBonus || 0;
+      orderGroups[key].ageBonus += order.ageBonus || 0;
+      orderGroups[key].totalCommission += order.totalCommission || 0;
     });
 
     // Objeyi diziye çevirip en yeni siparişler üstte olacak şekilde sırala
@@ -260,6 +279,18 @@ function OrderHistory({ formatCurrency }) {
         doc.text(`Beyaz Fiyat Toplam: ${formatCurrency(order.totalWhitePrice)}`, 130, finalY);
       } else {
         doc.text(`KDV Dahil Toplam: ${formatCurrency(order.totalAmountWithVAT)}`, 130, finalY);
+      }
+      
+      // Prim bilgilerini göster (sadece admin)
+      if (order.totalCommission > 0) {
+        doc.text(`Satıcı Primi: ${formatCurrency(order.totalCommission)}`, 130, finalY + 7);
+        doc.text(`Temel Prim: ${formatCurrency(order.baseCommission)}`, 130, finalY + 14);
+        if (order.orderBonus > 0) {
+          doc.text(`Sipariş Tutarı Primi: ${formatCurrency(order.orderBonus)}`, 130, finalY + 21);
+        }
+        if (order.ageBonus > 0) {
+          doc.text(`Stok Yaşı Primi: ${formatCurrency(order.ageBonus)}`, 130, finalY + 28);
+        }
       }
       
       // PDF'i kaydet
@@ -335,6 +366,23 @@ function OrderHistory({ formatCurrency }) {
                   <p><strong>Beyaz Fiyat:</strong> {formatCurrency(order.totalWhitePrice)}</p>
                 ) : (
                   <p><strong>KDV Dahil:</strong> {formatCurrency(order.totalAmountWithVAT)}</p>
+                )}
+                
+                {/* Prim bilgileri - Sadece admin */}
+                {(order.totalCommission > 0 || order.baseCommission > 0 || order.orderBonus > 0 || order.ageBonus > 0) && (
+                  <div className="commission-info">
+                    <p><strong>Satıcı Primi:</strong> {formatCurrency(order.totalCommission || 0)}</p>
+                    {(order.orderBonus > 0 || order.ageBonus > 0) && (
+                      <details>
+                        <summary>Prim Detayları</summary>
+                        <div className="commission-details">
+                          <p>Temel Prim: {formatCurrency(order.baseCommission || 0)}</p>
+                          {order.orderBonus > 0 && <p>Sipariş Tutarı Primi: {formatCurrency(order.orderBonus)}</p>}
+                          {order.ageBonus > 0 && <p>Stok Yaşı Primi: {formatCurrency(order.ageBonus)}</p>}
+                        </div>
+                      </details>
+                    )}
+                  </div>
                 )}
               </div>
               

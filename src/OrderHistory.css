@@ -184,6 +184,42 @@ summary {
   font-weight: bold;
 }
 
+/* Prim bilgileri stilleri */
+.commission-info {
+  display: flex;
+  flex-direction: column;
+  background: #f3f9f4;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-top: 5px;
+  border-left: 3px solid #4CAF50;
+}
+
+.commission-details {
+  font-size: 0.85rem;
+  padding: 5px 0 0 10px;
+  color: #555;
+}
+
+.commission-details p {
+  margin: 3px 0;
+}
+
+/* Prim detay görünümü */
+.commission-info details {
+  margin-top: 2px;
+}
+
+.commission-info summary {
+  font-size: 0.85rem;
+  color: #4CAF50;
+  cursor: pointer;
+}
+
+.commission-info summary:hover {
+  text-decoration: underline;
+}
+
 /* Mobil Responsive Ayarlar */
 @media (max-width: 768px) {
   .order-header {

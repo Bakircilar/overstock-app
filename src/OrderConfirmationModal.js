@@ -13,7 +13,9 @@ const OrderConfirmationModal = ({
   totalOrderAmountWithVAT,
   totalWhitePriceAmount,
   selectedPriceType,
-  formatCurrency 
+  formatCurrency,
+  commission,
+  isAdmin // Admin kontrolü için parametre ekledik
 }) => {
   if (!show) return null;
 
@@ -69,6 +71,21 @@ const OrderConfirmationModal = ({
               <p><strong>KDV Dahil Toplam:</strong> {formatCurrency(totalOrderAmountWithVAT)}</p>
             ) : (
               <p><strong>Beyaz Fiyat Toplam:</strong> {formatCurrency(totalWhitePriceAmount)}</p>
+            )}
+            
+            {/* Sadece admin için prim bilgileri */}
+            {isAdmin && commission && (
+              <div className="commission-info">
+                <h4>Satıcı Primi Bilgileri</h4>
+                <p><strong>Toplam Prim:</strong> {formatCurrency(commission.totalCommission)}</p>
+                <p><strong>Temel Prim (%2):</strong> {formatCurrency(commission.baseCommission)}</p>
+                {commission.orderBonus > 0 && (
+                  <p><strong>Sipariş Tutarı Primi:</strong> {formatCurrency(commission.orderBonus)}</p>
+                )}
+                {commission.ageBonus > 0 && (
+                  <p><strong>Stok Yaşı Primi:</strong> {formatCurrency(commission.ageBonus)}</p>
+                )}
+              </div>
             )}
           </div>
         </div>

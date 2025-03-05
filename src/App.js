@@ -19,6 +19,38 @@ function formatCurrency(amount) {
   }) + " ₺";
 }
 
+// Prim hesaplama fonksiyonu
+function calculateCommission(orderAmount, stockAge) {
+  // Temel prim: Satış tutarının %2'si
+  let baseCommission = orderAmount * 0.02;
+  
+  // Sipariş tutarına göre ek prim
+  let orderBonus = 0;
+  if (orderAmount >= 200000) {
+    orderBonus = orderAmount * 0.02; // 200,000 TL üzeri siparişlerde ek %2
+  } else if (orderAmount >= 50000) {
+    orderBonus = orderAmount * 0.01; // 50,000 TL üzeri siparişlerde ek %1
+  }
+  
+  // Stok yaşına göre ek prim
+  let ageBonus = 0;
+  if (stockAge >= 180) {
+    ageBonus = orderAmount * 0.015; // 180+ gün bekleyen stoklar için ek %1.5
+  } else if (stockAge >= 90) {
+    ageBonus = orderAmount * 0.01; // 90+ gün bekleyen stoklar için ek %1
+  }
+  
+  // Toplam prim
+  const totalCommission = baseCommission + orderBonus + ageBonus;
+  
+  return {
+    baseCommission,
+    orderBonus,
+    ageBonus,
+    totalCommission
+  };
+}
+
 function App() {
   const [products, setProducts] = useState([]); 
   const [orderQuantities, setOrderQuantities] = useState({}); 
@@ -34,6 +66,7 @@ function App() {
   const [orderToConfirm, setOrderToConfirm] = useState([]);
   const [showOrderPanel, setShowOrderPanel] = useState(false); // Panel görünürlüğü için
   const [selectedPriceType, setSelectedPriceType] = useState(null); // Fiyat tipi seçimi için, başlangıçta null
+  const [commission, setCommission] = useState(null); // Prim bilgileri için
 
   // Stok için düşük seviye eşiği
   const LOW_STOCK_THRESHOLD = 5;
@@ -69,7 +102,15 @@ function App() {
           stock: item.stock ? parseInt(item.stock, 10) : 0,
           category: item.category || "Diğer",
           vatRate: item.vatRate ? parseFloat(item.vatRate) : 18,
-          unit: item.unit || "Adet"
+          unit: item.unit || "Adet",
+          // Yeni alanlar
+          entryCost: item.entryCost ? parseFloat(item.entryCost) : 0,
+          latestCost: item.latestCost ? parseFloat(item.latestCost) : 0,
+          entryDate: item.entryDate || new Date().toISOString().split('T')[0],
+          latestCostDate: item.latestCostDate || new Date().toISOString().split('T')[0],
+          // Stok yaşını hesapla (gün olarak)
+          stockAge: item.entryDate ? 
+            Math.floor((new Date() - new Date(item.entryDate)) / (1000 * 60 * 60 * 24)) : 0
         }));
         
         setProducts(productList);
@@ -96,7 +137,13 @@ function App() {
         setProducts(prevProducts => 
           prevProducts.map(product => 
             product.id === updatedProduct.id ? 
-              { ...product, stock: updatedProduct.stock } : 
+              { 
+                ...product, 
+                stock: updatedProduct.stock,
+                // Güncel maliyet ve tarih bilgilerini de güncelle
+                latestCost: updatedProduct.latestCost,
+                latestCostDate: updatedProduct.latestCostDate
+              } : 
               product
           )
         );
@@ -150,6 +197,9 @@ function App() {
     }
 
     const itemsToOrder = [];
+    let totalOrderValue = 0;
+    let averageStockAge = 0;
+    let totalOrderedItems = 0;
     
     for (const product of products) {
       const quantity = parseInt(orderQuantities[product.id] || "0", 10);
@@ -158,6 +208,14 @@ function App() {
         const priceWithVAT = product.price * (1 + product.vatRate / 100);
         const whitePrice = product.price * (1 + product.vatRate / 200);
         const selectedPrice = selectedPriceType === "kdvDahil" ? priceWithVAT : whitePrice;
+        
+        // Toplam sipariş değerine ekle
+        const itemTotal = selectedPrice * quantity;
+        totalOrderValue += itemTotal;
+        
+        // Stok yaşı toplamını güncelle
+        averageStockAge += product.stockAge * quantity;
+        totalOrderedItems += quantity;
         
         itemsToOrder.push({
           id: product.id,
@@ -171,7 +229,8 @@ function App() {
           totalWhitePrice: whitePrice * quantity,
           selectedPriceType: selectedPriceType,
           selectedPrice: selectedPrice,
-          totalSelectedPrice: selectedPrice * quantity
+          totalSelectedPrice: selectedPrice * quantity,
+          stockAge: product.stockAge
         });
       }
     }
@@ -180,6 +239,13 @@ function App() {
       alert("Sipariş için geçerli miktar girilmedi!");
       return;
     }
+    
+    // Ortalama stok yaşını hesapla
+    averageStockAge = totalOrderedItems > 0 ? Math.round(averageStockAge / totalOrderedItems) : 0;
+    
+    // Prim hesapla
+    const calculatedCommission = calculateCommission(totalOrderValue, averageStockAge);
+    setCommission(calculatedCommission);
 
     setOrderToConfirm(itemsToOrder);
     setShowConfirmationModal(true);
@@ -242,6 +308,18 @@ function App() {
         doc.text(`KDV Dahil Toplam: ${formatCurrency(totalOrderAmountWithVAT)}`, 130, finalY);
       } else {
         doc.text(`Beyaz Fiyat Toplam: ${formatCurrency(totalWhitePriceAmount)}`, 130, finalY);
+      }
+      
+      // Admin ise prim bilgilerini ekle
+      if (isAdmin && commission) {
+        doc.text(`Satıcı Primi: ${formatCurrency(commission.totalCommission)}`, 130, finalY + 7);
+        doc.text(`- Temel Prim (%2): ${formatCurrency(commission.baseCommission)}`, 130, finalY + 14);
+        if (commission.orderBonus > 0) {
+          doc.text(`- Sipariş Tutarı Primi: ${formatCurrency(commission.orderBonus)}`, 130, finalY + 21);
+        }
+        if (commission.ageBonus > 0) {
+          doc.text(`- Stok Yaşı Primi: ${formatCurrency(commission.ageBonus)}`, 130, finalY + 28);
+        }
       }
       
       // PDF'i kaydet
@@ -331,6 +409,12 @@ function App() {
             totalPrice: product.price * quantity * (1 + product.vatRate / 100),
             unit: product.unit,
             selectedPriceType: selectedPriceType,
+            stockAge: product.stockAge,
+            // Prim bilgilerini de ekle
+            baseCommission: commission ? commission.baseCommission / ordersToSend.length : 0,
+            orderBonus: commission ? commission.orderBonus / ordersToSend.length : 0,
+            ageBonus: commission ? commission.ageBonus / ordersToSend.length : 0,
+            totalCommission: commission ? commission.totalCommission / ordersToSend.length : 0,
             timestamp: new Date()
           });
           updatedProducts.find(p => p.id === product.id).stock -= quantity;
@@ -371,6 +455,7 @@ function App() {
       setCustomerName(""); 
       setCustomerPhone(""); 
       setSelectedPriceType(null);
+      setCommission(null);
       setShowOrderPanel(false);
       alert("Sipariş başarıyla gönderildi!");
     } catch (error) {
@@ -485,6 +570,7 @@ function App() {
               <th>Fiyat (KDV Dahil)</th>
               <th>Beyaz Fiyat</th>
               <th>Stok</th>
+              {isAdmin && <th>Stok Yaşı</th>} {/* Admin için stok yaşı gösterimi */}
               <th>Sipariş Miktarı</th>
               <th>Tutar (KDV Dahil)</th>
               <th>Beyaz Fiyat Tutarı</th>
@@ -511,6 +597,8 @@ function App() {
                   }}>
                     {product.stock}
                   </td>
+                  {/* Admin için stok yaşı gösterimi */}
+                  {isAdmin && <td>{product.stockAge} gün</td>}
                   <td>
                     <input
                       type="number"
@@ -640,6 +728,8 @@ function App() {
         totalWhitePriceAmount={totalWhitePriceAmount}
         selectedPriceType={selectedPriceType}
         formatCurrency={formatCurrency}
+        commission={commission}
+        isAdmin={isAdmin}
       />
     </div>
   );
